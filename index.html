@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KannaLIFE · 开发者日志</title>
+    <meta name="description" content="KannaLIFE 的个人技术博客，记录学习与思考。" />
+
+    <!-- ========== 基础样式（极客风格 · 保留色调 · 更方正） ========== -->
+    <style>
+        /* ----- 全局变量 ----- */
+        :root {
+            --bg: #040611;
+            --bg2: #07101f;
+            --panel: rgba(10, 16, 29, .72);
+            --line: rgba(185, 210, 255, .15);
+            --text: #eef4ff;
+            --muted: #98a7c2;
+            --blue: #79b8ff;
+            --violet: #b78cff;
+            --gold: #f7d38a;
+            --shadow: 0 22px 70px rgba(0, 0, 0, .5);
+            --radius: 6px;
+            /* 更极客：小圆角 */
+            --max: 1180px;
+            --font: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: var(--font);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background: var(--bg);
+            position: relative;
+        }
+
+        /* ---- 2D 星云画布 (底层) ---- */
+        #nebulaCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            display: block;
+        }
+
+        /* ---- 所有内容在 z-index 上层 ---- */
+        .app {
+            position: relative;
+            z-index: 1;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        /* ----- 工具类 ----- */
+        .wrap {
+            position: relative;
+            width: min(calc(100% - 32px), var(--max));
+            margin: 0 auto;
+        }
+
+        /* ========================================================== */
+        /* ===== 全屏欢迎层 (命令行打字 + 飞入导航) ===== */
+        /* ========================================================== */
+        #splash {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+            /* 点击穿透，让动画不受干扰 */;
+        }
+        #splash .splash-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: clamp(3.6rem, 12vw, 8rem);
+            font-weight: 700;
+            font-family: var(--font);
+            letter-spacing: 0.04em;
+            color: #fff;
+            text-shadow: 0 0 40px rgba(121, 184, 255, 0.2);
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #splash .splash-inner .cursor {
+            display: inline-block;
+            width: 0.08em;
+            height: 1em;
+            background: var(--blue);
+            margin-left: 4px;
+            animation: blink 0.9s step-end infinite;
+            vertical-align: text-bottom;
+        }
+        #splash .splash-inner .greeting-text {
+            display: inline-block;
+            background: linear-gradient(90deg, #fff, var(--blue), var(--violet), var(--gold));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        #splash .splash-inner .greeting-emoji {
+            display: inline-block;
+            font-size: 0.7em;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            color: var(--gold);
+        }
+        #splash .splash-inner .greeting-emoji.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* 光标闪烁 */
+        @keyframes blink {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* ===== 导航栏 (接收飞入的问候) ===== */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            backdrop-filter: blur(12px);
+            background: rgba(4, 6, 17, .75);
+            border-bottom: 1px solid var(--line);
+            padding: 10px 0;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        /* 飞入的问候语在导航中的最终位置 */
+        #greeting {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            font-family: var(--font);
+            opacity: 0;
+            transform: scale(0.6);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            letter-spacing: 0.02em;
+        }
+        #greeting.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        #greeting .greeting-emoji {
+            font-size: 1.2rem;
+            color: var(--gold);
+        }
+        .avatar-large {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid var(--blue);
+            box-shadow: 0 0 30px rgba(121, 184, 255, .2);
+            flex-shrink: 0;
+            background: rgba(12, 19, 34, .8);
+        }
+        .avatar-large img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .identity {
+            line-height: 1.3;
+        }
+        .identity .name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+            color: #fff;
+        }
+        .identity .tagline {
+            font-size: .7rem;
+            color: var(--muted);
+            font-family: monospace;
+        }
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            color: var(--muted);
+            font-size: .85rem;
+            font-family: monospace;
+        }
+        .nav-links a {
+            position: relative;
+            transition: .2s;
+            padding: 4px 0;
+        }
+        .nav-links a::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -2px;
+            width: 0;
+            height: 1px;
+            background: linear-gradient(90deg, var(--blue), var(--violet));
+            transition: width .25s;
+        }
+        .nav-links a:hover {
+            color: #fff;
+        }
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* ===== 主内容区块 (默认隐藏，由 JS 控制显示) ===== */
+        .main-content {
+            padding: 40px 0 60px;
+            display: grid;
+            gap: 40px;
+        }
+
+        .block {
+            background: rgba(8, 12, 24, .7);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 32px 36px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transform: translateY(50px);
+            transition: opacity 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+            will-change: transform, opacity;
+        }
+        .block.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .block-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--line);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: monospace;
+        }
+        .block-title .badge {
+            font-size: .65rem;
+            background: rgba(121, 184, 255, .12);
+            padding: 2px 12px;
+            border-radius: 999px;
+            color: var(--muted);
+            border: 1px solid var(--line);
+            font-weight: 400;
+        }
+
+        .block-content {
+            display: grid;
+            gap: 16px;
+            color: var(--muted);
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+        .block-content p {
+            margin: 0;
+        }
+        .block-content .highlight {
+            color: var(--text);
+            font-weight: 500;
+        }
+        .block-content .tech-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            background: rgba(121, 184, 255, .08);
+            border: 1px solid var(--line);
+            font-size: .8rem;
+            font-family: monospace;
+            color: #dce8ff;
+            margin: 2px 4px 2px 0;
+        }
+        .block-content .tech-tag.gold {
+            border-color: rgba(247, 211, 138, .25);
+            background: rgba(247, 211, 138, .08);
+            color: var(--gold);
+        }
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .grid-2col .col {
+            display: grid;
+            gap: 8px;
+        }
+        .grid-2col .col .label {
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--muted);
+            font-weight: 600;
+            border-bottom: 1px dashed var(--line);
+            padding-bottom: 4px;
+        }
+
+        /* ===== 3D 星群容器 ===== */
+        #starCluster {
+            position: relative;
+            width: 100%;
+            height: 580px;
+            min-height: 420px;
+            border-radius: var(--radius);
+            border: 1px solid var(--line);
+            background: rgba(4, 6, 17, .6);
+            overflow: hidden;
+            margin-top: 8px;
+            backdrop-filter: blur(2px);
+        }
+        #starCluster canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* ===== Footer ===== */
+        footer {
+            padding: 28px 0 48px;
+            color: var(--muted);
+            text-align: center;
+            font-size: .8rem;
+            font-family: monospace;
+            border-top: 1px solid var(--line);
+            margin-top: 20px;
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 920px) {
+            .grid-2col {
+                grid-template-columns: 1fr;
+            }
+            #starCluster {
+                height: 460px;
+                min-height: 320px;
+            }
+            .block {
+                padding: 24px 20px;
+            }
+        }
+        @media (max-width: 640px) {
+            .nav {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .nav-left {
+                width: 100%;
+                justify-content: space-between;
+            }
+            #greeting {
+                font-size: 1rem;
+            }
+            .block-title {
+                font-size: 1.2rem;
+            }
+            #starCluster {
+                height: 360px;
+                min-height: 260px;
+            }
+            #splash .splash-inner {
+                font-size: clamp(2.8rem, 16vw, 5rem);
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== 2D 星云画布 (底层) ===== -->
+    <canvas id="nebulaCanvas"></canvas>
+
+    <!-- ============================================================ -->
+    <!-- ===== 全屏欢迎层 (命令行打字 + 飞入导航) ===== -->
+    <!-- ============================================================ -->
+    <div id="splash">
+        <div class="splash-inner" id="splashInner">
+            <span class="greeting-text" id="greetingText"></span>
+            <span class="cursor" id="cursorEl"></span>
+            <span class="greeting-emoji" id="greetingEmoji">(^_^)/</span>
+        </div>
+    </div>
+
+    <!-- ===== 应用主体 ===== -->
+    <div class="app">
+
+        <!-- ===== 顶部导航 ===== -->
+        <header id="header">
+            <div class="wrap nav">
+                <div class="nav-left">
+                    <!-- 飞入的问候语将出现在这里 -->
+                    <div id="greeting"></div>
+                    <div class="avatar-large">
+                        <img src="image/KannaLIFE.jpg" alt="KannaLIFE" />
+                    </div>
+                    <div class="identity">
+                        <div class="name">KannaLIFE</div>
+                        
+                    </div>
+                </div>
+                <nav class="nav-links">
+                    <a href="#about">#about</a>
+                    <a href="#tech">#tech</a>
+                    <a href="#social">#social</a>
+                    <a href="#friends">#friends</a>
+                    <a href="index.html">home</a>
+                </nav>
+            </div>
+        </header>
+
+        <!-- ===== 主内容 ===== -->
+        <main class="wrap main-content">
+
+            <!-- 区块：关于 -->
+            <section class="block" id="about">
+                <div class="block-title">
+                    <span id="aboutTitle">关于</span>
+                    <span class="badge">/about</span>
+                </div>
+                <div class="block-content" id="aboutContent">
+                    <p>我是 <span class="highlight">KannaLIFE</span>，一个还在成长中的开发者。</p>
+                    <p>想学更多东西，交更多朋友。</p>
+                </div>
+            </section>
+
+            <!-- 区块：技术栈 & 学习方向 -->
+            <section class="block" id="tech">
+                <div class="block-title">
+                    <span id="techTitle">技术栈 · 学习路线</span>
+                    <span class="badge">/tech</span>
+                </div>
+                <div class="block-content">
+                    <div class="grid-2col">
+                        <div class="col">
+                            <div class="label" id="techLangLabel">✦ 当前掌握</div>
+                            <div>
+                                <span class="tech-tag">C</span>
+                                <span class="tech-tag">Python</span>
+                                <span class="tech-tag">Java</span>
+                                <span class="tech-tag">HTML</span>
+                                <span class="tech-tag">CSS</span>
+                            </div>
+                            <div style="margin-top:12px;">
+                                <span class="tech-tag gold">Git</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="label" id="techLearnLabel">✦ 正在学习</div>
+                            <div>
+                                <span class="tech-tag" style="border-color:rgba(247,211,138,.4);">AI / 机器学习</span>
+                                <span class="tech-tag" style="border-color:rgba(247,211,138,.4);">全栈 (React + Node)</span>
+                            </div>
+                            <div style="margin-top:12px;">
+                                <span class="tech-tag">WebGL</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ===== 社交 · 坐标 ===== -->
+<section class="block" id="social">
+    <div class="block-title">
+        <span>社交 · 坐标</span>
+        <span class="badge">/social</span>
+    </div>
+    <div class="block-content" style="display: flex; flex-wrap: wrap; gap: 18px 30px; padding-top: 4px;">
+        <a href="https://x.com/@IN_LIFE_K" target="_blank" class="social-link" style="display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; transition: color 0.2s; font-family: monospace;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+</svg> X (Twitter)
+        </a>
+        <a href="https://bsky.app/profile/in-life-k.bsky.social" target="_blank" class="social-link" style="display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; transition: color 0.2s; font-family: monospace;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="#1185fe">
+    <path d="M12 21.6c-1.2-1.2-2.4-2.4-3.6-3.6-2.4-2.4-4.8-4.8-7.2-7.2-1.2-1.2-1.2-3.6 0-4.8 1.2-1.2 3.6-1.2 4.8 0 2.4 2.4 4.8 4.8 7.2 7.2 1.2 1.2 3.6 1.2 4.8 0 2.4-2.4 4.8-4.8 7.2-7.2 1.2-1.2 3.6-1.2 4.8 0 1.2 1.2 1.2 3.6 0 4.8-2.4 2.4-4.8 4.8-7.2 7.2-1.2 1.2-2.4 2.4-3.6 3.6z"/>
+    <path d="M12 21.6c1.2-1.2 2.4-2.4 3.6-3.6 2.4-2.4 4.8-4.8 7.2-7.2 1.2-1.2 1.2-3.6 0-4.8-1.2-1.2-3.6-1.2-4.8 0-2.4 2.4-4.8 4.8-7.2 7.2-1.2 1.2-3.6 1.2-4.8 0-2.4-2.4-4.8-4.8-7.2-7.2-1.2-1.2-3.6-1.2-4.8 0-1.2 1.2-1.2 3.6 0 4.8 2.4 2.4 4.8 4.8 7.2 7.2 1.2 1.2 2.4 2.4 3.6 3.6z"/>
+</svg> Bluesky
+        </a>
+        <a href="https://discord.com/users/你的ID" target="_blank" class="social-link" style="display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; transition: color 0.2s; font-family: monospace;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="#5865F2">
+    <path d="M20.317 4.37a19.8 19.8 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.387 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.68 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.95 10.95 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+</svg> Discord
+        </a>
+        <a href="https://github.com/KannaLIFE" target="_blank" class="social-link" style="display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; transition: color 0.2s; font-family: monospace;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.468-2.38 1.235-3.22-.123-.3-.535-1.52.117-3.16 0 0 1.008-.322 3.3 1.23.96-.267 1.98-.399 3-.399 1.02 0 2.04.132 3 .399 2.29-1.552 3.297-1.23 3.297-1.23.653 1.64.24 2.86.118 3.16.768.84 1.233 1.91 1.233 3.22 0 4.61-2.804 5.62-5.476 5.92.43.37.824 1.102.824 2.22 0 1.602-.015 2.894-.015 3.287 0 .322.216.694.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+</svg> GitHub
+        </a>
+        <a href="https://qm.qq.com/q/N4G9sQhiUM" target="_blank" class="social-link" style="display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; transition: color 0.2s; font-family: monospace;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="#12B7F5">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+    <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/>
+</svg> QQ
+        </a>
+    </div>
+    <style>
+        /* 悬停效果（与现有导航链接一致） */
+        .social-link:hover {
+            color: #fff !important;
+            text-shadow: 0 0 12px rgba(121, 184, 255, 0.3);
+        }
+        .social-link:hover span {
+            transform: scale(1.1);
+            display: inline-block;
+        }
+    </style>
+</section>
+
+            <!-- 区块：友链 (3D 星群) -->
+            <section class="block" id="friends" style="padding-bottom:20px;">
+                <div class="block-title">
+                    <span id="friendsTitle">友链 · 星群</span>
+                    <span class="badge">/friends</span>
+                </div>
+                <div id="starCluster"></div>
+            </section>
+
+        </main>
+
+        <!-- ===== Footer ===== -->
+        <footer>
+            <span id="footerText">© 2026 KannaLIFE · 开源 · 用 ❤ 和 ⌨️ 构建</span>
+        </footer>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- ========== Three.js 3D 星群 (ES Module) ========== -->
+    <!-- ============================================================ -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // ----- 导入 -----
+        import * as THREE from 'three';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // ----- 多语言数据 -----
+        const lang = navigator.language.startsWith('zh') ? 'zh' : 'en';
+        const texts = {
+            zh: {
+                greeting: '你好',
+                headerTagline: 'C / Python / Java · 学习中',
+                aboutTitle: '关于',
+                aboutContent: `
+              <p>我是 <span class="highlight">KannaLIFE</span>，一个还在成长中的开发者。</p>
+              <p>想学更多东西，交更多朋友。</p>
+            `,
+                techTitle: '技术栈 · 学习路线',
+                techLangLabel: '✦ 当前掌握',
+                techLearnLabel: '✦ 正在学习',
+                friendsTitle: '友链 · 星群',
+                footerText: '© 2026 KannaLIFE · 开源 · 用 ❤ 和 ⌨️ 构建'
+            },
+            en: {
+                greeting: 'hi',
+                headerTagline: 'C / Python / Java · learning',
+                aboutTitle: 'About',
+                aboutContent: `
+              <p>I'm <span class="highlight">KannaLIFE</span>, a developer still growing.</p>
+              <p>Want to learn more and make more friends.</p>
+            `,
+                techTitle: 'Tech Stack · Learning Path',
+                techLangLabel: '✦ Currently using',
+                techLearnLabel: '✦ Learning',
+                friendsTitle: 'Friends · Constellation',
+                footerText: '© 2026 KannaLIFE · Open source · built with ❤ and ⌨️'
+            }
+        };
+        const t = texts[lang];
+
+        // ===== 更新页面中存在的元素 =====
+        // 只更新实际存在的 ID，避免报错
+        const el = (id) => document.getElementById(id);
+        if (el('headerTagline')) el('headerTagline').textContent = t.headerTagline;
+        if (el('aboutTitle')) el('aboutTitle').textContent = t.aboutTitle;
+        if (el('aboutContent')) el('aboutContent').innerHTML = t.aboutContent;
+        if (el('techTitle')) el('techTitle').textContent = t.techTitle;
+        if (el('techLangLabel')) el('techLangLabel').textContent = t.techLangLabel;
+        if (el('techLearnLabel')) el('techLearnLabel').textContent = t.techLearnLabel;
+        if (el('friendsTitle')) el('friendsTitle').textContent = t.friendsTitle;
+        if (el('footerText')) el('footerText').textContent = t.footerText;
+
+        // ================================================================
+        // 1. 加载动画：命令行打字 + 飞入导航
+        // ================================================================
+        const splash = document.getElementById('splash');
+        const splashInner = document.getElementById('splashInner');
+        const greetingText = document.getElementById('greetingText');
+        const cursorEl = document.getElementById('cursorEl');
+        const greetingEmoji = document.getElementById('greetingEmoji');
+        const greetingFinal = document.getElementById('greeting');
+        const header = document.getElementById('header');
+
+        const word = t.greeting; // "你好" 或 "hi"
+        let index = 0;
+        let typingDone = false;
+
+        function typeChar() {
+            if (index < word.length) {
+                greetingText.textContent += word[index];
+                index++;
+                setTimeout(typeChar, 150 + Math.random() * 200);
+            } else {
+                // 打字完成
+                typingDone = true;
+                // 光标继续闪烁，然后显示表情
+                setTimeout(() => {
+                    cursorEl.style.display = 'none';
+                    greetingEmoji.classList.add('show');
+                    // 再等一会，开始飞入动画
+                    setTimeout(flyToNav, 800);
+                }, 400);
+            }
+        }
+
+        function flyToNav() {
+            // 1. 将 splash 内的文字 + 表情 复制到导航的 #greeting 中
+            const textContent = greetingText.textContent;
+            const emojiContent = '(^_^)/';
+            greetingFinal.innerHTML = `
+            <span>${textContent}</span>
+            <span class="greeting-emoji">${emojiContent}</span>
+          `;
+            // 2. 导航栏出现
+            header.classList.add('visible');
+            // 3. 问候语缩放出现
+            requestAnimationFrame(() => {
+                greetingFinal.classList.add('show');
+            });
+
+            // 4. 让 splash 淡出，同时将内容缩小飞入的效果通过视觉延续
+            splash.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            splash.style.transform = 'scale(0.9)';
+            splash.style.opacity = '0';
+            // 5. 移除 splash
+            setTimeout(() => {
+                splash.style.display = 'none';
+                // 6. 主内容区块依次上滑
+                revealBlocks();
+            }, 700);
+        }
+
+        // ----- 主内容区块依次上滑 -----
+        function revealBlocks() {
+            const blocks = document.querySelectorAll('.block');
+            blocks.forEach((block, i) => {
+                setTimeout(() => {
+                    block.classList.add('visible');
+                }, 150 * (i + 1));
+            });
+        }
+
+        // ----- 启动打字 -----
+        setTimeout(typeChar, 300);
+
+        // ================================================================
+        // 2. 2D 星云画布 (独立运行)
+        // ================================================================
+        const canvas = document.getElementById('nebulaCanvas');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+
+        function resizeCanvas() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const stars2D = [];
+        const NUM_STARS = 120;
+        for (let i = 0; i < NUM_STARS; i++) {
+            stars2D.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                r: Math.random() * 2 + 0.5,
+                dx: (Math.random() - 0.5) * 0.3,
+                dy: (Math.random() - 0.5) * 0.3,
+                alpha: Math.random() * 0.8 + 0.2,
+                color: `hsla(${210 + Math.random()*30}, 70%, 70%, `
+            });
+        }
+
+        function drawNebula() {
+            ctx.clearRect(0, 0, w, h);
+            const grad = ctx.createRadialGradient(w * 0.3, h * 0.2, 0, w * 0.5, h * 0.4, w * 0.8);
+            grad.addColorStop(0, 'rgba(30, 40, 80, 0.4)');
+            grad.addColorStop(0.4, 'rgba(15, 20, 40, 0.3)');
+            grad.addColorStop(1, 'rgba(4, 6, 17, 0.9)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            const t = Date.now() / 60000;
+            for (let i = 0; i < 6; i++) {
+                const cx = w * (0.2 + 0.6 * (0.5 + 0.5 * Math.sin(t * 0.3 + i * 2.0)));
+                const cy = h * (0.2 + 0.6 * (0.5 + 0.5 * Math.cos(t * 0.4 + i * 1.7)));
+                const rad = 150 + 80 * Math.sin(t * 0.2 + i);
+                const grad2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+                grad2.addColorStop(0, `rgba(80, 130, 255, ${0.04 + 0.02 * Math.sin(t + i)})`);
+                grad2.addColorStop(0.6, `rgba(140, 100, 255, ${0.03 + 0.02 * Math.cos(t*0.7 + i)})`);
+                grad2.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad2;
+                ctx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+            }
+
+            stars2D.forEach(s => {
+                s.x += s.dx;
+                s.y += s.dy;
+                if (s.x < 0 || s.x > w) s.dx *= -1;
+                if (s.y < 0 || s.y > h) s.dy *= -1;
+                const alpha = s.alpha * (0.7 + 0.3 * Math.sin(Date.now() / 1000 + s.x));
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                ctx.fillStyle = s.color + alpha + ')';
+                ctx.fill();
+            });
+
+            for (let i = 0; i < 40; i++) {
+                const idx1 = Math.floor(Math.random() * stars2D.length);
+                const idx2 = (idx1 + 1 + Math.floor(Math.random() * 5)) % stars2D.length;
+                const s1 = stars2D[idx1];
+                const s2 = stars2D[idx2];
+                const dist = Math.hypot(s1.x - s2.x, s1.y - s2.y);
+                if (dist < 120 && dist > 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(s1.x, s1.y);
+                    ctx.lineTo(s2.x, s2.y);
+                    ctx.strokeStyle = `rgba(121,184,255,${0.06 + 0.04 * Math.sin(Date.now()/2000 + i)})`;
+                    ctx.lineWidth = 0.6;
+                    ctx.stroke();
+                }
+            }
+            requestAnimationFrame(drawNebula);
+        }
+        drawNebula();
+
+        // ================================================================
+        // 3. Three.js 3D 星群 (友链) — 保留用户原有的星群逻辑
+        // ================================================================
+        // 友链数据 (双语)
+        const friendData = [{
+            name: 'LyGreen',
+            url: 'https://lygreen.github.io/',
+            avatar: 'image/lygreen.jpg',
+            desc_zh: '机器学习 / 全栈',
+            desc_en: 'AI / full-stack'
+        }, {
+            name: '虚无信标',
+            url: '#',
+            avatar: 'https://ui-avatars.com/api/?name=虚无&background=2d3436&color=fff&size=128',
+            desc_zh: 'none',
+            desc_en: 'none'
+        
+        }, ];
+
+        const FRIENDS = friendData.map(f => ({
+            ...f,
+            desc: lang === 'zh' ? f.desc_zh : f.desc_en
+        }));
+
+        const ME = {
+            name: 'KannaLIFE',
+            avatar: 'image/KannaLIFE.jpg',
+            desc: lang === 'zh' ? '' : ''
+        };
+
+        const container = document.getElementById('starCluster');
+        if (!container) {
+            console.warn('星群容器 #starCluster 不存在，跳过 3D 渲染');
+        } else {
+            const cWidth = container.clientWidth;
+            const cHeight = container.clientHeight;
+
+            const scene = new THREE.Scene();
+            scene.background = null;
+
+            const camera = new THREE.PerspectiveCamera(45, cWidth / cHeight, 0.1, 1000);
+            camera.position.set(0, 1.2, 7.5);
+            camera.lookAt(0, 0, 0);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(cWidth, cHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            container.appendChild(renderer.domElement);
+
+            const labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(cWidth, cHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0';
+            labelRenderer.domElement.style.left = '0';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            container.appendChild(labelRenderer.domElement);
+
+            // 灯光
+            const ambient = new THREE.AmbientLight(0x4466aa, 0.6);
+            scene.add(ambient);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+            dir.position.set(2, 5, 4);
+            scene.add(dir);
+            const back = new THREE.DirectionalLight(0x8888ff, 0.6);
+            back.position.set(-3, -1, -5);
+            scene.add(back);
+
+            // 星星粒子
+            const starCount = 400;
+            const pos = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount; i++) {
+                const r = 6 + Math.random() * 20;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                pos[i * 3 + 1] = r * Math.cos(phi);
+                pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            const starGeo = new THREE.BufferGeometry();
+            starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const starMat = new THREE.PointsMaterial({
+                color: 0x88bbff,
+                size: 0.06,
+                transparent: true,
+                opacity: 0.5,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true,
+            });
+            const starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+
+            // 中央光晕
+            const glowGeo = new THREE.SphereGeometry(0.95, 32, 32);
+            const glowMat = new THREE.MeshPhongMaterial({
+                color: 0x79b8ff,
+                emissive: 0x224488,
+                emissiveIntensity: 0.2,
+                transparent: true,
+                opacity: 0.15,
+                wireframe: false,
+            });
+            const glowSphere = new THREE.Mesh(glowGeo, glowMat);
+            glowSphere.position.set(0, 0, 0);
+            scene.add(glowSphere);
+
+            const ringGeo = new THREE.TorusGeometry(1.25, 0.012, 16, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x79b8ff, transparent: true, opacity: 0.2, blending: THREE
+                    .AdditiveBlending });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 3;
+            ring.rotation.z = 0.2;
+            scene.add(ring);
+            const ring2 = new THREE.Mesh(
+                new THREE.TorusGeometry(1.42, 0.008, 16, 64),
+                new THREE.MeshBasicMaterial({ color: 0xb78cff, transparent: true, opacity: 0.12, blending: THREE
+                        .AdditiveBlending })
+            );
+            ring2.rotation.x = -Math.PI / 4;
+            ring2.rotation.y = 0.5;
+            scene.add(ring2);
+
+            // 中央标签
+            const centerDiv = document.createElement('div');
+            centerDiv.style.cssText = `
+              display: flex; flex-direction: column; align-items: center;
+              cursor: default; pointer-events: none; user-select: none;
+            `;
+            centerDiv.innerHTML = `
+              <div style="width:72px;height:72px;border-radius:50%;overflow:hidden;border:3px solid rgba(247,211,138,.5);
+                    box-shadow:0 0 50px rgba(121,184,255,.3);background:rgba(12,19,34,.8);flex-shrink:0;">
+                <img src="${ME.avatar}" alt="${ME.name}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+              </div>
+              <div style="margin-top:8px;font-size:.95rem;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 0 30px rgba(121,184,255,.3);">${ME.name}</div>
+              <div style="font-size:.7rem;color:var(--muted);margin-top:2px;font-family:monospace;">${ME.desc}</div>
+            `;
+            const centerLabel = new CSS2DObject(centerDiv);
+            centerLabel.position.set(0, 0, 0);
+            scene.add(centerLabel);
+
+            // 友链群组
+            const friendGroup = new THREE.Group();
+            scene.add(friendGroup);
+            const friendItems = [];
+            const radiusBase = 3.2;
+            const count = FRIENDS.length;
+
+            FRIENDS.forEach((f, idx) => {
+                const goldenRatio = (1 + Math.sqrt(5)) / 2;
+                const i = idx;
+                const total = count;
+                const theta = 2 * Math.PI * i / goldenRatio;
+                const phi = Math.acos(1 - 2 * (i + 0.5) / total);
+                const r = radiusBase + (Math.random() - 0.5) * 0.6;
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.cos(phi) * 0.85;
+                const z = r * Math.sin(phi) * Math.sin(theta);
+
+                const div = document.createElement('div');
+                div.className = 'friend-label';
+                div.dataset.index = idx;
+                div.style.cssText = `
+                display:flex; flex-direction:column; align-items:center;
+                cursor:pointer; user-select:none;
+                transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease;
+                will-change:transform; pointer-events:auto; width:70px;
+              `;
+                div.innerHTML = `
+                <div style="width:56px;height:56px;border-radius:50%;overflow:hidden;
+                    border:2px solid rgba(185,210,255,.2);background:rgba(12,19,34,.8);
+                    box-shadow:0 0 20px rgba(121,184,255,.08);
+                    transition: border-color 0.3s, box-shadow 0.4s, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+                    flex-shrink:0;">
+                  <img src="${f.avatar}" alt="${f.name}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+                </div>
+                <div style="margin-top:4px;font-size:.65rem;font-weight:600;color:var(--muted);text-align:center;
+                    line-height:1.3;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+                    transition:color 0.3s;">${f.name}</div>
+                <div style="position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%) scale(0.92);
+                    opacity:0;pointer-events:none;background:rgba(8,12,24,.92);backdrop-filter:blur(12px);
+                    border:1px solid rgba(121,184,255,.18);border-radius:6px;padding:8px 12px;min-width:120px;
+                    max-width:180px;box-shadow:0 20px 50px rgba(0,0,0,.6);
+                    transition:opacity 0.35s, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+                    text-align:center;z-index:30;font-family:monospace;">
+                  <div style="font-weight:700;font-size:.8rem;color:#fff;">${f.name}</div>
+                  <div style="font-size:.7rem;color:var(--muted);line-height:1.4;">${f.desc}</div>
+                  <div style="font-size:.6rem;color:var(--blue);margin-top:4px;opacity:.7;word-break:break-all;">${f.url}</div>
+                </div>
+              `;
+
+                div.addEventListener('mouseenter', () => {
+                    friendItems.forEach((l, i) => {
+                        const d = l.userData.dom;
+                        if (i === idx) {
+                            d.style.opacity = '1';
+                            d.querySelector('div:first-child').style.borderColor = 'var(--gold)';
+                            d.querySelector('div:first-child').style.boxShadow =
+                                '0 0 40px rgba(247,211,138,.25), 0 0 80px rgba(247,211,138,.08)';
+                            d.querySelector('div:first-child').style.transform = 'scale(1.08)';
+                            d.querySelector('div:nth-child(2)').style.color = '#fff';
+                            d.querySelector('div:last-child').style.opacity = '1';
+                            d.querySelector('div:last-child').style.transform = 'translateX(-50%) scale(1)';
+                        } else {
+                            d.style.opacity = '0.35';
+                            d.style.filter = 'grayscale(0.4)';
+                        }
+                    });
+                    window.__autoRotate = false;
+                });
+                div.addEventListener('mouseleave', () => {
+                    friendItems.forEach((l) => {
+                        const d = l.userData.dom;
+                        d.style.opacity = '1';
+                        d.style.filter = 'none';
+                        d.querySelector('div:first-child').style.borderColor = 'rgba(185,210,255,.2)';
+                        d.querySelector('div:first-child').style.boxShadow = '0 0 20px rgba(121,184,255,.08)';
+                        d.querySelector('div:first-child').style.transform = 'scale(1)';
+                        d.querySelector('div:nth-child(2)').style.color = 'var(--muted)';
+                        d.querySelector('div:last-child').style.opacity = '0';
+                        d.querySelector('div:last-child').style.transform = 'translateX(-50%) scale(0.92)';
+                    });
+                    window.__autoRotate = true;
+                });
+                div.addEventListener('click', () => {
+                    window.open(f.url, '_blank');
+                });
+
+                const label = new CSS2DObject(div);
+                label.position.set(x, y, z);
+                label.userData = { dom: div, index: idx };
+                friendGroup.add(label);
+                friendItems.push(label);
+
+                // 连接线
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(x, y, z)
+                ]);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: 0x4466aa,
+                    transparent: true,
+                    opacity: 0.06 + Math.random() * 0.06,
+                    blending: THREE.AdditiveBlending,
+                });
+                const line = new THREE.Line(lineGeo, lineMat);
+                friendGroup.add(line);
+            });
+
+            window.__autoRotate = true;
+            let time = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                time += 0.01;
+                if (window.__autoRotate) {
+                    friendGroup.rotation.y += 0.002;
+                    friendGroup.rotation.x = Math.sin(time * 0.08) * 0.04;
+                }
+                starField.rotation.y += 0.0001;
+                const pulse = 1 + Math.sin(time * 0.8) * 0.03;
+                glowSphere.scale.set(pulse, pulse, pulse);
+                ring.rotation.y += 0.004;
+                ring2.rotation.y -= 0.006;
+                ring2.rotation.x += 0.002;
+                renderer.render(scene, camera);
+                labelRenderer.render(scene, camera);
+            }
+            animate();
+
+            function resize3D() {
+                const w = container.clientWidth;
+                const h = container.clientHeight;
+                if (w === 0 || h === 0) return;
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+                labelRenderer.setSize(w, h);
+            }
+            window.addEventListener('resize', resize3D);
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(() => resize3D());
+                ro.observe(container);
+            }
+            setTimeout(resize3D, 100);
+        }
+    </script>
+
+</body>
+</html>
