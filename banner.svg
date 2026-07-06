@@ -61,7 +61,7 @@
 
     <!-- 头像（圆形裁剪） -->
     <image x="22" y="22" width="56" height="56" 
-           href="image/KannaLIFE.jpg" 
+           href="https://kannalife.github.io/image/KannaLIFE.jpg" 
            clip-path="url(#avatarClip)"/>
     <!-- 头像外圈光晕（金色，与页面一致） -->
     <circle cx="50" cy="50" r="32" stroke="rgba(247,211,138,0.25)" stroke-width="1.5" fill="none" filter="url(#glow)"/>
