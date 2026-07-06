@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
     <defs>
-        <!-- 深空背景（与页面一致） -->
+        <!-- 深空背景渐变 -->
         <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#040611"/>
             <stop offset="100%" stop-color="#07101f"/>
         </linearGradient>
-        <!-- 星云光晕（蓝紫金混合） -->
+        <!-- 三色星云光晕（蓝、紫、金） -->
         <radialGradient id="nebulaBlue" cx="20%" cy="40%" r="60%">
             <stop offset="0%" stop-color="rgba(121,184,255,0.10)"/>
             <stop offset="100%" stop-color="transparent"/>
@@ -18,17 +18,13 @@
             <stop offset="0%" stop-color="rgba(247,211,138,0.06)"/>
             <stop offset="100%" stop-color="transparent"/>
         </radialGradient>
-        <!-- 名字渐变：白 → 蓝 → 紫 → 金（与主标题完全一致） -->
+        <!-- 名字渐变：白 → 蓝 → 紫 → 金（与页面主标题完全一致） -->
         <linearGradient id="nameGrad" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="#ffffff"/>
             <stop offset="35%" stop-color="#79b8ff"/>
             <stop offset="60%" stop-color="#b78cff"/>
             <stop offset="100%" stop-color="#f7d38a"/>
         </linearGradient>
-        <!-- 圆形裁剪 -->
-        <clipPath id="avatarClip">
-            <circle cx="50" cy="50" r="28"/>
-        </clipPath>
         <!-- 发光滤镜 -->
         <filter id="glow">
             <feGaussianBlur stdDeviation="1.5" result="blur"/>
@@ -45,7 +41,7 @@
     <rect width="400" height="100" fill="url(#nebulaPurple)"/>
     <rect width="400" height="100" fill="url(#nebulaGold)"/>
 
-    <!-- 零星点缀（与页面星点类似） -->
+    <!-- 零星点缀（与页面风格一致） -->
     <circle cx="80" cy="15" r="1" fill="#fff" opacity="0.5"/>
     <circle cx="160" cy="10" r="1.5" fill="#fff" opacity="0.7"/>
     <circle cx="280" cy="20" r="1" fill="#fff" opacity="0.4"/>
@@ -54,26 +50,13 @@
     <circle cx="240" cy="90" r="1" fill="#fff" opacity="0.4"/>
     <circle cx="320" cy="80" r="0.8" fill="#fff" opacity="0.5"/>
 
-    <!-- 闪烁星星（呼吸效果） -->
+    <!-- 一颗呼吸闪烁的星星 -->
     <circle cx="160" cy="10" r="2" fill="#fff" opacity="0.7">
         <animate attributeName="opacity" values="0.7;0.1;0.7" dur="2.5s" repeatCount="indefinite"/>
     </circle>
 
-    <!-- 头像（圆形裁剪） -->
-    <image x="22" y="22" width="56" height="56" 
-           href="https://kannalife.github.io/image/KannaLIFE.jpg" 
-           clip-path="url(#avatarClip)"/>
-    <!-- 头像外圈光晕（金色，与页面一致） -->
-    <circle cx="50" cy="50" r="32" stroke="rgba(247,211,138,0.25)" stroke-width="1.5" fill="none" filter="url(#glow)"/>
-
-    <!-- 名字（使用完整渐变） -->
-    <text x="92" y="58" font-family="'SF Mono', 'Fira Code', monospace" font-size="20" font-weight="700" fill="url(#nameGrad)" filter="url(#glow)">
+    <!-- 名字：居中，大号，使用完整渐变 -->
+    <text x="200" y="62" font-family="'SF Mono', 'Fira Code', monospace" font-size="34" font-weight="700" fill="url(#nameGrad)" filter="url(#glow)" text-anchor="middle" letter-spacing="2">
         KannaLIFE
-    </text>
-
-    <!-- 光标闪烁（蓝紫色） -->
-    <text x="228" y="58" font-family="'SF Mono', monospace" font-size="20" fill="#79b8ff" opacity="0.6">
-        <animate attributeName="opacity" values="0.6;0;0.6" dur="1.2s" repeatCount="indefinite"/>
-        |
     </text>
 </svg>
